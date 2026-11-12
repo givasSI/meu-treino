@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meu Treino</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1d6b4f">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mut:#6b6a66;--ac:#1d6b4f;--acx:#fff;--bd:#e3e1da;--ok:#1d6b4f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141413;--card:#1f1f1d;--tx:#f1f0ea;--mut:#a09f98;--ac:#4cc38a;--acx:#0d1f17;--bd:#34332f;--ok:#4cc38a}}
+:root[data-theme="dark"]{--bg:#141413;--card:#1f1f1d;--tx:#f1f0ea;--mut:#a09f98;--ac:#4cc38a;--acx:#0d1f17;--bd:#34332f;--ok:#4cc38a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;padding-bottom:110px}
+main{max-width:560px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:6px 0 14px}
+h2{font-size:17px;margin:0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.mut{color:var(--mut);font-size:14px}
+button,.btn{font:inherit;border:0;border-radius:12px;padding:12px 16px;background:var(--ac);color:var(--acx);font-weight:600;cursor:pointer}
+button.sec{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+button.lnk{background:none;color:var(--mut);padding:6px 8px;font-weight:500}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sp{justify-content:space-between}
+.sets{display:flex;gap:10px;margin:12px 0 8px;flex-wrap:wrap}
+.set{width:52px;height:52px;border-radius:50%;border:2px solid var(--bd);background:transparent;color:var(--mut);font-size:17px;padding:0}
+.set.on{background:var(--ok);border-color:var(--ok);color:var(--acx)}
+.ex.done{opacity:.6}
+input[type=text],input[type=number]{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:8px 10px;width:100px}
+input.wide{width:100%}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:1px solid var(--bd);display:none}
+.bar.show{display:block}
+.bar .in{max-width:560px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
+.big{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.prog{height:6px;background:var(--bd);border-radius:6px;overflow:hidden;margin:8px 0 14px}
+.prog i{display:block;height:100%;background:var(--ok);width:0}
+.msg{padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--bd);margin:10px 0;font-size:14px}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<div class="bar" id="bar"><div class="in"><div><div class="mut" id="barLbl">Descanso</div><div class="big" id="barT">1:00</div></div><button class="sec" id="barX">Pular</button></div></div>
+<input type="file" id="file" accept="image/*" capture="environment" hidden>
+<script>
+(function(){
+var KEY="treinos_v1", S={workouts:[],open:null,msg:"",busy:false,raw:""}, timer=null;
+var SEED={id:"w0",name:"Experimental Masc",exercises:[
+["19 Supino Máquina Aberto"],["Elevação Frontal (H)"],["Rosca Simultânea (H)"],["Tríceps Francês (H)"],["03 Cadeira Extensora"],["05 Cadeira Abdutora"],["Panturrilha em Pé Livre"]
+].map(function(e){return {name:e[0],sets:3,reps:10,rest:60,load:"",done:0}})};
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function load(){try{var r=localStorage.getItem(KEY);if(r){S.workouts=JSON.parse(r)}}catch(e){}
+ if(!S.workouts.length)S.workouts=[SEED]}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S.workouts))}catch(e){}}
+function cur(){return S.workouts.filter(function(w){return w.id===S.open})[0]}
+function fmt(s){return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")}
+
+function rest(sec,name){clearInterval(timer);var end=Date.now()+sec*1000,bar=document.getElementById("bar");
+ document.getElementById("barLbl").textContent="Descanso: "+name;bar.classList.add("show");
+ function tick(){var l=Math.max(0,Math.round((end-Date.now())/1000));document.getElementById("barT").textContent=fmt(l);
+  if(l<=0){clearInterval(timer);document.getElementById("barLbl").textContent="Pode ir pra próxima série";try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}}}
+ tick();timer=setInterval(tick,500)}
+document.getElementById("barX").onclick=function(){clearInterval(timer);document.getElementById("bar").classList.remove("show")};
+
+function render(){var a=document.getElementById("app"),w=cur();
+ if(!w){a.innerHTML='<h1>Meus treinos</h1>'+S.workouts.map(function(x){
+   var tot=x.exercises.reduce(function(n,e){return n+e.sets},0);return '<div class="card"><div class="row sp"><div><h2>'+esc(x.name)+'</h2><div class="mut">'+x.exercises.length+' exercícios, '+tot+' séries</div></div><button data-open="'+x.id+'">Abrir</button></div></div>'}).join("")
+  +'<div class="card"><h2>Importar da foto</h2><p class="mut">Tire uma foto da ficha e o treino é montado aqui. A leitura roda no seu aparelho, sem enviar a foto pra lugar nenhum.</p>'
+  +'<button id="shot">Tirar ou escolher foto</button>'
+  +' <button class="sec" id="manual">Criar na mão</button>'
+  +(S.busy?'<div class="msg">'+esc(S.busy===true?"Lendo a ficha...":S.busy)+'</div>':'')+(S.msg?'<div class="msg">'+esc(S.msg)+'</div>':'')+(S.raw?'<details class="msg"><summary>Texto que o OCR leu</summary><pre style="white-space:pre-wrap;font-size:12px">'+esc(S.raw)+'</pre></details>':'')+'</div>';
+  a.querySelectorAll("[data-open]").forEach(function(b){b.onclick=function(){S.open=b.dataset.open;S.msg="";render()}});
+  var sh=document.getElementById("shot");if(sh)sh.onclick=function(){document.getElementById("file").click()};
+  document.getElementById("manual").onclick=function(){var n=prompt("Nome do treino?","Treino A");if(!n)return;
+   var x={id:"w"+Date.now(),name:n,exercises:[]};S.workouts.push(x);S.open=x.id;save();render()};
+  return}
+ var tot=0,dn=0;w.exercises.forEach(function(e){tot+=e.sets;dn+=Math.min(e.done,e.sets)});
+ var h='<div class="row sp"><button class="lnk" id="back">← Treinos</button><button class="lnk" id="del">Excluir</button></div><h1>'+esc(w.name)+'</h1>'
+  +'<div class="mut">'+dn+' de '+tot+' séries feitas</div><div class="prog"><i style="width:'+(tot?dn/tot*100:0)+'%"></i></div>';
+ w.exercises.forEach(function(e,i){var ok=e.done>=e.sets;
+  h+='<div class="card ex'+(ok?' done':'')+'"><div class="row sp"><h2 data-nm="'+i+'" style="cursor:pointer">'+esc(e.name)+'</h2><button class="lnk" data-rm="'+i+'">remover</button></div>'
+   +'<div class="mut">'+e.sets+' x '+e.reps+' reps, descanso '+fmt(e.rest)+'</div><div class="sets">';
+  for(var s=0;s<e.sets;s++)h+='<button class="set'+(s<e.done?' on':'')+'" data-ex="'+i+'" data-s="'+s+'">'+(s<e.done?'✓':s+1)+'</button>';
+  h+='</div><div class="row"><span class="mut">Carga (kg)</span><input type="number" inputmode="decimal" data-load="'+i+'" value="'+esc(e.load)+'"></div></div>'});
+ h+='<div class="row"><button class="sec" id="add">+ Exercício</button><button class="sec" id="reset">Zerar séries</button></div>';
+ a.innerHTML=h;
+ document.getElementById("back").onclick=function(){S.open=null;render()};
+ document.getElementById("del").onclick=function(){if(confirm("Excluir este treino?")){S.workouts=S.workouts.filter(function(x){return x!==w});S.open=null;save();render()}};
+ document.getElementById("reset").onclick=function(){w.exercises.forEach(function(e){e.done=0});save();render()};
+ document.getElementById("add").onclick=function(){var n=prompt("Nome do exercício?");if(!n)return;var sr=parseInt(prompt("Quantas séries?","3"),10)||3,rp=parseInt(prompt("Quantas repetições?","10"),10)||10;
+  w.exercises.push({name:n,sets:sr,reps:rp,rest:60,load:"",done:0});save();render()};
+ a.querySelectorAll("[data-nm]").forEach(function(h){h.onclick=function(){var e=w.exercises[+h.dataset.nm],n=prompt("Nome do exercício",e.name);if(!n)return;e.name=n;var sr=parseInt(prompt("Séries",e.sets),10),rp=parseInt(prompt("Repetições",e.reps),10);if(sr)e.sets=sr;if(rp)e.reps=rp;save();render()}});
+ a.querySelectorAll("[data-rm]").forEach(function(b){b.onclick=function(){w.exercises.splice(+b.dataset.rm,1);save();render()}});
+ a.querySelectorAll("[data-load]").forEach(function(inp){inp.onchange=function(){w.exercises[+inp.dataset.load].load=inp.value;save()}});
+ a.querySelectorAll(".set").forEach(function(b){b.onclick=function(){var e=w.exercises[+b.dataset.ex],s=+b.dataset.s;
+  if(s<e.done){e.done=s}else{e.done=s+1;if(e.done<e.sets||true)rest(e.rest,e.name)}
+  save();render()}})}
+
+function prep(f){return new Promise(function(res,rej){var im=new Image(),u=URL.createObjectURL(f);
+ im.onload=function(){var r=Math.min(2000/Math.max(im.width,im.height),2),c=document.createElement("canvas");
+  c.width=Math.round(im.width*r);c.height=Math.round(im.height*r);var x=c.getContext("2d");x.drawImage(im,0,0,c.width,c.height);
+  var d=x.getImageData(0,0,c.width,c.height),p=d.data;
+  for(var i=0;i<p.length;i+=4){var g=.3*p[i]+.59*p[i+1]+.11*p[i+2];g=(g-128)*1.35+128;g=g<0?0:g>255?255:g;p[i]=p[i+1]=p[i+2]=g}
+  x.putImageData(d,0,0);URL.revokeObjectURL(u);res(c)};
+ im.onerror=function(){rej(new Error("img"))};im.src=u})}
+
+function title(t){return t.toLowerCase().replace(/(^|[\s(])([a-zà-ú])/g,function(m,a,b){return a+b.toUpperCase()}).replace(/\((h)\)/gi,"(H)").replace(/\b(Em|De|Do|Da)\b/g,function(m){return m.toLowerCase()})}
+var HDR=/^(data|funcion|professor|treino|s[eé]rie\s*:|sess|in[ií]cio|pos\b)/i;
+function parse(txt){var L=txt.split(/\r?\n/).map(function(l){return l.trim()}).filter(Boolean),ex=[],last=null,name="";
+ L.forEach(function(l){var u=l.replace(/[|_]/g," ").trim();
+  var m=u.match(/^s[eé]rie\s*[:.]?\s*(.+)$/i);if(m&&!name)name=title(m[1]);
+  var se=u.match(/S[EA]R\s*[:.]?\s*(\d+)/i),re=u.match(/R[EF]P\s*[:.]?\s*(\d+)/i);
+  if(se&&re){var it=u.match(/INT\s*[:.]?\s*(\d+)\s*(MIN|SEG|S\b)?/i),rs=60;
+   if(it){rs=/SEG|S$/i.test(it[2]||"")?+it[1]:+it[1]*60}
+   if(last){ex.push({name:last,sets:+se[1]||3,reps:+re[1]||10,rest:rs>=10&&rs<=600?rs:60,load:"",done:0});last=null}return}
+  if(HDR.test(u)||/^[\s.\-_=:]+$/.test(u)||/\d{2}\/\d{2}\/\d{4}/.test(u))return;
+  var letters=(u.match(/[A-Za-zÀ-ú]/g)||[]).length;
+  if(letters>=4&&!/^\W*pos/i.test(u))last=title(u.replace(/[^\wÀ-ú()\s]/g,"").replace(/\s+/g," ").trim())});
+ return {name:name||"Treino",exercises:ex}}
+
+document.getElementById("file").onchange=async function(ev){var f=ev.target.files[0];ev.target.value="";if(!f)return;
+ S.busy="Preparando a imagem...";S.msg="";S.raw="";render();
+ try{if(!window.Tesseract)throw new Error("lib");
+  var cv=await prep(f);
+  var r=await Tesseract.recognize(cv,"por",{logger:function(m){if(m.status==="recognizing text"){S.busy="Lendo a ficha... "+Math.round(m.progress*100)+"%";var b=document.querySelector("#app .msg");if(b)b.textContent=S.busy}else if(/loading/.test(m.status)){S.busy="Baixando o modelo de leitura (só na primeira vez)...";var b2=document.querySelector("#app .msg");if(b2)b2.textContent=S.busy}}});
+  S.raw=r.data.text;var d=parse(S.raw);
+  if(!d.exercises.length)throw new Error("empty");
+  var w={id:"w"+Date.now(),name:d.name,exercises:d.exercises};
+  S.workouts.push(w);S.open=w.id;S.busy=false;S.raw="";save();
+  S.msg="";render();alert("Treino importado com "+d.exercises.length+" exercícios. Confira os nomes e toque em um nome para corrigir se precisar.")
+ }catch(e){S.busy=false;S.msg=e.message==="lib"?"A biblioteca de leitura não carregou. Confira sua internet e recarregue.":"Não consegui montar o treino dessa foto. Tente com mais luz, a ficha esticada e a foto de frente, ou crie na mão.";render()}};
+
+load();render();
+})();
+</script>
+</body>
+</html>
